@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real-Time Chat App</title>
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <style>
+        /* Base Styles */
+        :root {
+            --primary: #4361ee;
+            --secondary: #3f37c9;
+            --accent: #4895ef;
+            --dark: #1b263b;
+            --light: #f8f9fa;
+            --success: #4cc9f0;
+            --danger: #f72585;
+            --warning: #f8961e;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        body {
+            background-color: #f0f2f5;
+            color: #333;
+            line-height: 1.6;
+        }
+        
+        /* Layout */
+        .container {
+            display: flex;
+            height: 100vh;
+            max-width: 1400px;
+            margin: 0 auto;
+            overflow: hidden;
+        }
+        
+        /* Sidebar */
+        .sidebar {
+            width: 300px;
+            background-color: white;
+            border-right: 1px solid #ddd;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .user-profile {
+            padding: 20px;
+            background-color: var(--primary);
+            color: white;
+            display: flex;
+            align-items: center;
+        }
+        
+        .user-profile img {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            margin-right: 10px;
+        }
+        
+        .rooms {
+            flex: 1;
+            overflow-y: auto;
+            padding: 10px;
+        }
+        
+        .room {
+            padding: 12px 15px;
+            margin-bottom: 5px;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .room:hover {
+            background-color: #e9ecef;
+        }
+        
+        .room.active {
+            background-color: var(--primary);
+            color: white;
+        }
+        
+        .room .badge {
+            float: right;
+            background-color: var(--danger);
+            color: white;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            text-align: center;
+            font-size: 12px;
+            line-height: 20px;
+            display: none;
+        }
+        
+        /* Chat Area */
+        .chat-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .chat-header {
+            padding: 15px 20px;
+            background-color: white;
+            border-bottom: 1px solid #ddd;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        
+        .chat-messages {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            background-color: #f8f9fa;
+        }
+        
+        .message {
+            margin-bottom: 15px;
+            max-width: 70%;
+        }
+        
+        .message.sent {
+            margin-left: auto;
+            text-align: right;
+        }
+        
+        .message.received {
+            margin-right: auto;
+        }
+        
+        .message-content {
+            display: inline-block;
+            padding: 10px 15px;
+            border-radius: 18px;
+            background-color: white;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+            word-break: break-word;
+        }
+        
+        .message.sent .message-content {
+            background-color: var(--primary);
+            color: white;
+        }
+        
+        .message-info {
+            font-size: 12px;
+            color: #6c757d;
+            margin-bottom: 5px;
+        }
+        
+        .file-message {
+            display: inline-block;
+            padding: 10px;
+            background-color: white;
+            border-radius: 8px;
+            border: 1px solid #ddd;
+            margin-top: 5px;
+        }
+        
+        .file-message a {
+            color: var(--primary);
+            text-decoration: none;
+        }
+        
+        .file-message a:hover {
+            text-decoration: underline;
+        }
+        
+        /* Input Area */
+        .input-area {
+            padding: 15px;
+            background-color: white;
+            border-top: 1px solid #ddd;
+            display: flex;
+            align-items: center;
+        }
+        
+        .input-area input {
+            flex: 1;
+            padding: 12px 15px;
+            border: 1px solid #ddd;
+            border-radius: 25px;
+            outline: none;
+            font-size: 16px;
+        }
+        
+        .input-area input:focus {
+            border-color: var(--primary);
+        }
+        
+        .input-area button {
+            margin-left: 10px;
+            padding: 12px 20px;
+            background-color: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 25px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        
+        .input-area button:hover {
+            background-color: var(--secondary);
+        }
+        
+        .file-input {
+            display: none;
+        }
+        
+        .file-label {
+            padding: 12px;
+            margin-right: 10px;
+            background-color: #e9ecef;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .file-label:hover {
+            background-color: #dee2e6;
+        }
+        
+        /* Notification */
+        .notification {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            padding: 15px 20px;
+            background-color: var(--dark);
+            color: white;
+            border-radius: 5px;
+            box-shadow: 0 3px 10px rgba(0,0,0,0.2);
+            transform: translateY(100px);
+            opacity: 0;
+            transition: all 0.3s;
+            z-index: 1000;
+        }
+        
+        .notification.show {
+            transform: translateY(0);
+            opacity: 1;
+        }
+        
+        /* Responsive */
+        @media (max-width: 768px) {
+            .container {
+                flex-direction: column;
+            }
+            
+            .sidebar {
+                width: 100%;
+                height: auto;
+                max-height: 200px;
+            }
+            
+            .chat-area {
+                height: calc(100vh - 200px);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Sidebar -->
+        <div class="sidebar">
+            <div class="user-profile">
+                <img src="https://ui-avatars.com/api/?name=Chat+User&background=random" alt="User">
+                <div>
+                    <h3 id="username-display">Guest</h3>
+                    <small>Online</small>
+                </div>
+            </div>
+            
+            <div class="rooms">
+                <h4 style="padding: 15px; color: var(--dark);">Chat Rooms</h4>
+                <div class="room active" data-room="general">General Chat <span class="badge">0</span></div>
+                <div class="room" data-room="tech">Tech Talk <span class="badge">0</span></div>
+                <div class="room" data-room="gaming">Gaming <span class="badge">0</span></div>
+                <div class="room" data-room="random">Random <span class="badge">0</span></div>
+            </div>
+        </div>
+        
+        <!-- Chat Area -->
+        <div class="chat-area">
+            <div class="chat-header">
+                <h2 id="current-room">General Chat</h2>
+                <small id="room-users">1 user online</small>
+            </div>
+            
+            <div class="chat-messages" id="messages">
+                <!-- Messages will appear here -->
+                <div class="message system">
+                    <div class="message-content">
+                        Welcome to the chat! Select a room to start chatting.
+                    </div>
+                </div>
+            </div>
+            
+            <div class="input-area">
+                <label for="file-input" class="file-label">
+                    📎
+                </label>
+                <input type="file" id="file-input" class="file-input">
+                <input type="text" id="message-input" placeholder="Type your message...">
+                <button id="send-button">Send</button>
+            </div>
+        </div>
+    </div>
+    
+    <div class="notification" id="notification">
+        New message in <span id="notification-room"></span>
+    </div>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // DOM Elements
+            const messageInput = document.getElementById('message-input');
+            const sendButton = document.getElementById('send-button');
+            const messagesContainer = document.getElementById('messages');
+            const fileInput = document.getElementById('file-input');
+            const rooms = document.querySelectorAll('.room');
+            const currentRoomDisplay = document.getElementById('current-room');
+            const roomUsersDisplay = document.getElementById('room-users');
+            const usernameDisplay = document.getElementById('username-display');
+            const notification = document.getElementById('notification');
+            const notificationRoom = document.getElementById('notification-room');
+            
+            // App State
+            let currentRoom = 'general';
+            let username = 'Guest';
+            let unreadMessages = {
+                general: 0,
+                tech: 0,
+                gaming: 0,
+                random: 0
+            };
+            
+            // Prompt for username
+            username = prompt('Enter your username:') || 'Guest';
+            usernameDisplay.textContent = username;
+            
+            // Connect to Socket.io server
+            const socket = io('https://socket-io-chat-server.glitch.me/'); // Using a public demo server
+            
+            // Socket.io event handlers
+            socket.on('connect', () => {
+                console.log('Connected to server');
+                joinRoom(currentRoom);
+            });
+            
+            socket.on('disconnect', () => {
+                console.log('Disconnected from server');
+            });
+            
+            socket.on('message', (data) => {
+                if (data.room === currentRoom) {
+                    // Message is for current room
+                    displayMessage(data);
+                    scrollToBottom();
+                } else {
+                    // Message is for another room - show notification
+                    unreadMessages[data.room]++;
+                    updateRoomBadges();
+                    showNotification(data.room);
+                }
+            });
+            
+            socket.on('roomUsers', ({ room, users }) => {
+                if (room === currentRoom) {
+                    roomUsersDisplay.textContent = `${users} user${users !== 1 ? 's' : ''} online`;
+                }
+            });
+            
+            socket.on('file', (data) => {
+                if (data.room === currentRoom) {
+                    displayFile(data);
+                    scrollToBottom();
+                } else {
+                    unreadMessages[data.room]++;
+                    updateRoomBadges();
+                    showNotification(data.room);
+                }
+            });
+            
+            // UI Event Listeners
+            sendButton.addEventListener('click', sendMessage);
+            messageInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    sendMessage();
+                }
+            });
+            
+            fileInput.addEventListener('change', (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    sendFile(file);
+                }
+            });
+            
+            rooms.forEach(room => {
+                room.addEventListener('click', () => {
+                    const newRoom = room.dataset.room;
+                    if (newRoom !== currentRoom) {
+                        // Leave current room
+                        socket.emit('leaveRoom', currentRoom);
+                        
+                        // Join new room
+                        currentRoom = newRoom;
+                        currentRoomDisplay.textContent = room.textContent.split(' ')[0];
+                        
+                        // Update UI
+                        rooms.forEach(r => r.classList.remove('active'));
+                        room.classList.add('active');
+                        
+                        // Clear unread count
+                        unreadMessages[currentRoom] = 0;
+                        updateRoomBadges();
+                        
+                        // Clear messages and join new room
+                        messagesContainer.innerHTML = '';
+                        joinRoom(currentRoom);
+                    }
+                });
+            });
+            
+            // Functions
+            function joinRoom(room) {
+                socket.emit('joinRoom', { username, room }, (response) => {
+                    // Display welcome message
+                    const welcomeMessage = {
+                        username: 'System',
+                        text: response.message,
+                        time: new Date().toLocaleTimeString(),
+                        room: currentRoom
+                    };
+                    displayMessage(welcomeMessage);
+                    
+                    // Update user count
+                    roomUsersDisplay.textContent = `${response.users} user${response.users !== 1 ? 's' : ''} online`;
+                });
+            }
+            
+            function sendMessage() {
+                const message = messageInput.value.trim();
+                if (message) {
+                    const messageData = {
+                        username,
+                        text: message,
+                        room: currentRoom
+                    };
+                    
+                    socket.emit('message', messageData);
+                    messageInput.value = '';
+                    
+                    // Display message immediately (optimistic UI)
+                    messageData.time = new Date().toLocaleTimeString();
+                    displayMessage(messageData, true);
+                    scrollToBottom();
+                }
+            }
+            
+            function sendFile(file) {
+                if (file.size > 5 * 1024 * 1024) { // 5MB limit
+                    alert('File size too large (max 5MB)');
+                    return;
+                }
+                
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const fileData = {
+                        username,
+                        room: currentRoom,
+                        fileName: file.name,
+                        fileType: file.type,
+                        fileData: e.target.result.split(',')[1] // Remove data URL prefix
+                    };
+                    
+                    socket.emit('file', fileData);
+                    
+                    // Display file immediately (optimistic UI)
+                    fileData.time = new Date().toLocaleTimeString();
+                    displayFile(fileData, true);
+                    scrollToBottom();
+                };
+                reader.readAsDataURL(file);
+                fileInput.value = ''; // Reset file input
+            }
+            
+            function displayMessage(data, isSent = false) {
+                const messageDiv = document.createElement('div');
+                messageDiv.className = `message ${isSent ? 'sent' : 'received'}`;
+                
+                const messageInfo = document.createElement('div');
+                messageInfo.className = 'message-info';
+                messageInfo.textContent = `${data.username} • ${data.time}`;
+                
+                const messageContent = document.createElement('div');
+                messageContent.className = 'message-content';
+                messageContent.textContent = data.text;
+                
+                messageDiv.appendChild(messageInfo);
+                messageDiv.appendChild(messageContent);
+                messagesContainer.appendChild(messageDiv);
+            }
+            
+            function displayFile(data, isSent = false) {
+                const messageDiv = document.createElement('div');
+                messageDiv.className = `message ${isSent ? 'sent' : 'received'}`;
+                
+                const messageInfo = document.createElement('div');
+                messageInfo.className = 'message-info';
+                messageInfo.textContent = `${data.username} • ${data.time}`;
+                
+                const messageContent = document.createElement('div');
+                messageContent.className = 'message-content';
+                messageContent.textContent = 'Sent a file:';
+                
+                const fileDiv = document.createElement('div');
+                fileDiv.className = 'file-message';
+                
+                const fileLink = document.createElement('a');
+                fileLink.href = `data:${data.fileType};base64,${data.fileData}`;
+                fileLink.textContent = data.fileName;
+                fileLink.download = data.fileName;
+                fileLink.target = '_blank';
+                
+                fileDiv.appendChild(fileLink);
+                messageContent.appendChild(fileDiv);
+                
+                messageDiv.appendChild(messageInfo);
+                messageDiv.appendChild(messageContent);
+                messagesContainer.appendChild(messageDiv);
+            }
+            
+            function scrollToBottom() {
+                messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            }
+            
+            function updateRoomBadges() {
+                rooms.forEach(room => {
+                    const roomName = room.dataset.room;
+                    const badge = room.querySelector('.badge');
+                    
+                    if (unreadMessages[roomName] > 0 && roomName !== currentRoom) {
+                        badge.textContent = unreadMessages[roomName];
+                        badge.style.display = 'block';
+                    } else {
+                        badge.style.display = 'none';
+                    }
+                });
+            }
+            
+            function showNotification(room) {
+                notificationRoom.textContent = room;
+                notification.classList.add('show');
+                
+                setTimeout(() => {
+                    notification.classList.remove('show');
+                }, 3000);
+            }
+        });
+    </script>
+</body>
+</html>
